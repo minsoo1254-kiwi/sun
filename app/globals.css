@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #f7f8fa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f7f8fa;
+  color: #191f28;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.content-text {
+  white-space: pre-line;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  line-height: 1.75;
+}
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+
+  button,
+  a {
+    print-color-adjust: exact;
+  }
+}

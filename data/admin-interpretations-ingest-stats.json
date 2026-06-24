@@ -1,0 +1,89 @@
+{
+  "total_records": 6170,
+  "files": [
+    {
+      "file_name": "2008년비정규직법_질의회시집(편집)-인쇄용.pdf",
+      "total_pages": 328,
+      "extracted_pages": 307,
+      "empty_or_scanned_pages": 21,
+      "failed_pages": 0
+    },
+    {
+      "file_name": "근로기준법 질의회시집(2000.4월~2018.3월) (1).pdf",
+      "total_pages": 977,
+      "extracted_pages": 957,
+      "empty_or_scanned_pages": 20,
+      "failed_pages": 0
+    },
+    {
+      "file_name": "근로기준법 질의회시집(2018.4.~2023.6.).pdf",
+      "total_pages": 615,
+      "extracted_pages": 575,
+      "empty_or_scanned_pages": 40,
+      "failed_pages": 0
+    },
+    {
+      "file_name": "근로기준법_질의회시집 (1).pdf",
+      "total_pages": 246,
+      "extracted_pages": 224,
+      "empty_or_scanned_pages": 22,
+      "failed_pages": 0
+    },
+    {
+      "file_name": "근로기준법질의회시집(07.1월~10.12월).pdf",
+      "total_pages": 433,
+      "extracted_pages": 428,
+      "empty_or_scanned_pages": 5,
+      "failed_pages": 0
+    },
+    {
+      "file_name": "근로기준질의회시집(2011~2012년).pdf",
+      "total_pages": 245,
+      "extracted_pages": 0,
+      "empty_or_scanned_pages": 245,
+      "failed_pages": 0
+    },
+    {
+      "file_name": "근로자퇴직급여 질의회시집-(최종).pdf",
+      "total_pages": 991,
+      "extracted_pages": 974,
+      "empty_or_scanned_pages": 17,
+      "failed_pages": 0
+    },
+    {
+      "file_name": "기간제법 질의회시집(2007.7월~2018.3월).pdf",
+      "total_pages": 887,
+      "extracted_pages": 870,
+      "empty_or_scanned_pages": 17,
+      "failed_pages": 0
+    },
+    {
+      "file_name": "노동관계법질의회시집(2020_검색가능).pdf",
+      "total_pages": 593,
+      "extracted_pages": 576,
+      "empty_or_scanned_pages": 17,
+      "failed_pages": 0
+    },
+    {
+      "file_name": "임금채권보장법 질의회시집(1998.7월~2018.3월).pdf",
+      "total_pages": 235,
+      "extracted_pages": 220,
+      "empty_or_scanned_pages": 15,
+      "failed_pages": 0
+    },
+    {
+      "file_name": "퇴직급여법 질의회시집(2007.3월~2018.3월).pdf",
+      "total_pages": 659,
+      "extracted_pages": 653,
+      "empty_or_scanned_pages": 6,
+      "failed_pages": 0
+    },
+    {
+      "file_name": "파견법 질의회시집(2007.7월~2018.3월).pdf",
+      "total_pages": 399,
+      "extracted_pages": 386,
+      "empty_or_scanned_pages": 13,
+      "failed_pages": 0
+    }
+  ]
+}
