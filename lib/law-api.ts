@@ -189,6 +189,7 @@ function toSearchItem(item: CaseSummary, message = "상세 내용을 불러오�
 function removeSearchDetailContent(item: CaseSearchItem): CaseSearchItem {
   return {
     ...item,
+    detailLink: "",
     issues: "",
     summary: "",
     contentPreview: "",

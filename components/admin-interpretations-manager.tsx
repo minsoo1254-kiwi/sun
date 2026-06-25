@@ -22,6 +22,30 @@ const EMPTY_FORM: AdminInterpretationInput = {
   page_no: null
 };
 
+const REQUIRED_CSV_COLUMNS = [
+  "source_type",
+  "title",
+  "law_name",
+  "article",
+  "question",
+  "answer",
+  "issue_keywords",
+  "ministry",
+  "department",
+  "reply_date",
+  "source_url",
+  "file_name",
+  "page_no"
+];
+
+type CsvPreview = {
+  fileName: string;
+  headers: string[];
+  rows: string[][];
+  missingColumns: string[];
+  totalRows: number;
+};
+
 export default function AdminInterpretationsManager() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
@@ -31,6 +55,7 @@ export default function AdminInterpretationsManager() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -104,6 +129,8 @@ export default function AdminInterpretationsManager() {
       setItems([]);
       setForm(EMPTY_FORM);
       setEditingId(null);
+      setCsvFile(null);
+      setCsvPreview(null);
       setMessage("로그아웃했습니다.");
     } catch {
       setMessage("로그아웃에 실패했습니다.");
@@ -204,8 +231,13 @@ export default function AdminInterpretationsManager() {
   async function uploadCsv(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!csvFile) {
-      setMessage("CSV 파일을 선택해주세요.");
+    if (!csvFile || !csvPreview) {
+      setMessage("CSV 파일을 선택하고 컬럼 검증을 완료해주세요.");
+      return;
+    }
+
+    if (csvPreview.missingColumns.length > 0) {
+      setMessage(`필수 컬럼이 누락되어 업로드할 수 없습니다: ${csvPreview.missingColumns.join(", ")}`);
       return;
     }
 
@@ -233,6 +265,7 @@ export default function AdminInterpretationsManager() {
           : "";
       setMessage(`CSV 업로드 완료: ${payload.inserted}건 등록.${errorText}`);
       setCsvFile(null);
+      setCsvPreview(null);
       await loadItems();
     } catch {
       setMessage("CSV 업로드에 실패했습니다.");
@@ -261,6 +294,41 @@ export default function AdminInterpretationsManager() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  async function handleCsvFileChange(file: File | null) {
+    setCsvFile(null);
+    setCsvPreview(null);
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+      const [header = [], ...dataRows] = rows;
+      const headers = header.map((column) => column.trim());
+      const missingColumns = REQUIRED_CSV_COLUMNS.filter((column) => !headers.includes(column));
+
+      setCsvPreview({
+        fileName: file.name,
+        headers,
+        rows: dataRows.slice(0, 10),
+        missingColumns,
+        totalRows: dataRows.length
+      });
+
+      if (missingColumns.length > 0) {
+        setMessage(`필수 컬럼이 누락되었습니다: ${missingColumns.join(", ")}`);
+        return;
+      }
+
+      setCsvFile(file);
+      setMessage(`CSV 컬럼 검증 완료: ${dataRows.length.toLocaleString("ko-KR")}행을 업로드할 수 있습니다. 미리보기 확인 후 최종 저장하세요.`);
+    } catch {
+      setMessage("CSV 파일을 읽지 못했습니다.");
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#f7f8fa]">
       <div className="mx-auto grid w-full max-w-7xl gap-5 px-6 py-8">
@@ -273,7 +341,7 @@ export default function AdminInterpretationsManager() {
             <h1 className="text-3xl font-bold tracking-normal text-[#191f28]">행정해석 관리자</h1>
           </div>
           <div className="rounded-md border border-[#e5e8eb] bg-white px-4 py-3 text-sm font-medium text-[#6b7684] shadow-panel">
-            ADMIN_PASSWORD 기반 접근
+            서버 세션 기반 접근
           </div>
         </header>
 
@@ -284,7 +352,7 @@ export default function AdminInterpretationsManager() {
               <input
                 className="h-11 rounded-md border border-[#d1d6db] bg-[#fbfcfd] px-3 text-sm text-[#191f28] outline-none transition focus:border-[#3182f6] focus:bg-white focus:ring-2 focus:ring-[#e8f3ff]"
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder=".env.local의 ADMIN_PASSWORD"
+                placeholder="관리자 비밀번호"
                 type="password"
                 value={password}
               />
@@ -315,6 +383,7 @@ export default function AdminInterpretationsManager() {
           {message ? <p className="mt-3 text-sm font-semibold text-[#f04452]">{message}</p> : null}
         </section>
 
+        {authenticated ? (
         <section className="grid gap-5 lg:grid-cols-[1fr_420px]">
           <form className="rounded-md border border-[#e5e8eb] bg-white p-5 shadow-panel" onSubmit={saveItem}>
             <div className="mb-4 flex items-center justify-between">
@@ -365,19 +434,80 @@ export default function AdminInterpretationsManager() {
             <input
               accept=".csv,text/csv"
               className="block w-full rounded-md border border-[#d1d6db] bg-[#fbfcfd] px-3 py-2 text-sm text-[#4e5968]"
-              onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
+              onChange={(event) => void handleCsvFileChange(event.target.files?.[0] ?? null)}
               type="file"
             />
+            {csvPreview ? (
+              <div className="mt-4 rounded-md border border-[#e5e8eb] bg-[#fbfcfd] p-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-bold text-[#191f28]">{csvPreview.fileName}</p>
+                    <p className="mt-1 text-xs font-semibold text-[#8b95a1]">
+                      총 {csvPreview.totalRows.toLocaleString("ko-KR")}행 · 상위 10개 행 미리보기
+                    </p>
+                  </div>
+                  {csvPreview.missingColumns.length > 0 ? (
+                    <span className="rounded bg-[#fff1f1] px-2.5 py-1 text-xs font-bold text-[#f04452]">컬럼 오류</span>
+                  ) : (
+                    <span className="rounded bg-[#e6fcf5] px-2.5 py-1 text-xs font-bold text-[#087f5b]">검증 완료</span>
+                  )}
+                </div>
+                {csvPreview.missingColumns.length > 0 ? (
+                  <p className="mb-3 text-sm font-semibold leading-6 text-[#f04452]">
+                    누락 컬럼: {csvPreview.missingColumns.join(", ")}
+                  </p>
+                ) : null}
+                <div className="max-h-72 overflow-auto rounded border border-[#e5e8eb] bg-white">
+                  <table className="min-w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-[#f2f4f6] text-[#4e5968]">
+                      <tr>
+                        {csvPreview.headers.map((header, columnIndex) => (
+                          <th className="whitespace-nowrap px-3 py-2 font-bold" key={`${header || "empty-header"}-${columnIndex}`}>
+                            {header || "(빈 컬럼)"}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#f2f4f6] text-[#4e5968]">
+                      {csvPreview.rows.map((row, rowIndex) => (
+                        <tr key={`${csvPreview.fileName}-${rowIndex}`}>
+                          {csvPreview.headers.map((header, columnIndex) => (
+                            <td className="max-w-48 truncate whitespace-nowrap px-3 py-2" key={`${header}-${columnIndex}`}>
+                              {row[columnIndex] || ""}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                      {csvPreview.rows.length === 0 ? (
+                        <tr>
+                          <td className="px-3 py-6 text-center font-semibold text-[#8b95a1]" colSpan={Math.max(csvPreview.headers.length, 1)}>
+                            미리보기할 데이터 행이 없습니다.
+                          </td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
             <button
               className="mt-4 inline-flex h-10 items-center gap-2 rounded-md border border-[#d1d6db] bg-white px-4 text-sm font-bold text-[#4e5968] transition hover:bg-[#f2f4f6] disabled:opacity-40"
-              disabled={loading || !authenticated}
+              disabled={loading || !csvFile || !csvPreview || csvPreview.missingColumns.length > 0}
               type="submit"
             >
               <FileUp aria-hidden="true" size={16} strokeWidth={2.2} />
-              업로드
+              최종 확인 후 저장
             </button>
           </form>
         </section>
+        ) : (
+          <section className="rounded-md border border-[#e5e8eb] bg-white p-8 text-center shadow-panel">
+            <h2 className="text-lg font-bold text-[#191f28]">관리자 로그인이 필요합니다</h2>
+            <p className="mt-2 text-sm font-medium text-[#6b7684]">
+              행정해석 등록 폼과 CSV 업로드 영역은 로그인 후에만 표시됩니다.
+            </p>
+          </section>
+        )}
 
         <section className="rounded-md border border-[#e5e8eb] bg-white shadow-panel">
           <div className="border-b border-[#e5e8eb] px-5 py-4">
@@ -483,4 +613,54 @@ function TextArea({
       />
     </label>
   );
+}
+
+function parseCsv(csvText: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+
+  for (let index = 0; index < csvText.length; index += 1) {
+    const character = csvText[index];
+    const nextCharacter = csvText[index + 1];
+
+    if (character === '"' && quoted && nextCharacter === '"') {
+      field += '"';
+      index += 1;
+      continue;
+    }
+
+    if (character === '"') {
+      quoted = !quoted;
+      continue;
+    }
+
+    if (character === "," && !quoted) {
+      row.push(field);
+      field = "";
+      continue;
+    }
+
+    if ((character === "\n" || character === "\r") && !quoted) {
+      if (character === "\r" && nextCharacter === "\n") {
+        index += 1;
+      }
+
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      continue;
+    }
+
+    field += character;
+  }
+
+  if (field || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  return rows.filter((currentRow) => currentRow.some((cell) => cell.trim()));
 }

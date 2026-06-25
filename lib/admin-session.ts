@@ -3,7 +3,7 @@ import "server-only";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 export const ADMIN_SESSION_COOKIE = "hr_admin_session";
-const SESSION_MAX_AGE_SECONDS = 60 * 60;
+const SESSION_MAX_AGE_SECONDS = 30 * 60;
 
 type AdminSessionPayload = {
   exp: number;

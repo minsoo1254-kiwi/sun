@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, ChevronUp, ExternalLink, FileText, Highlighter, RotateCcw, Scale, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy, ExternalLink, FileText, Highlighter, RotateCcw, Scale, Search } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import HighlightedText from "@/components/highlighted-text";
 import type { ResultTypeFilter } from "@/types/admin-interpretation";
@@ -12,8 +12,10 @@ const COURT_OPTIONS = ["", "대법원", "서울고등법원", "서울중앙지�
 const SEARCH_STORAGE_KEY = "hr-law-integrated-search-state-v1";
 const ADMIN_INTERPRETATION_NOTICE =
   "행정해석은 행정기관의 해석 기준으로, 법원을 구속하지 않습니다. 개별 사안은 사실관계에 따라 달라질 수 있으므로 노무사 검토가 필요합니다.";
+const SEARCH_RESULT_NOTICE = "본 결과는 참고용이며, 개별 사건은 노무사 또는 변호사 검토가 필요합니다.";
 const LEGAL_NOTICE =
   "본 서비스는 공개된 판례 및 행정해석 자료를 검색·정리하기 위한 참고용 도구입니다. 행정해석은 행정기관의 해석 기준이며 법원의 판단과 다를 수 있습니다. 임금, 해고, 징계, 파견, 퇴직금 등 주요 노동분쟁 사안은 반드시 노무사 또는 변호사 검토가 필요합니다.";
+const FREQUENT_KEYWORDS = ["연차수당", "해고", "징계", "퇴직금", "파견", "수습", "포괄임금", "통상임금"];
 
 type SearchState = {
   query: string;
@@ -57,6 +59,7 @@ export default function SearchWorkspace() {
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [openAdminDetails, setOpenAdminDetails] = useState<Record<number, boolean>>({});
+  const [copiedResultKey, setCopiedResultKey] = useState("");
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -147,12 +150,20 @@ export default function SearchWorkspace() {
     void runSearch(1, { ...form, page: 1 });
   }
 
+  function searchFrequentKeyword(keyword: string) {
+    const nextForm = { ...form, query: keyword, page: 1 };
+
+    setForm(nextForm);
+    void runSearch(1, nextForm);
+  }
+
   function resetSearch() {
     setForm(INITIAL_STATE);
     setResponse(null);
     setMessage("");
     setHasSearched(false);
     setOpenAdminDetails({});
+    setCopiedResultKey("");
     window.sessionStorage.removeItem(SEARCH_STORAGE_KEY);
   }
 
@@ -190,6 +201,18 @@ export default function SearchWorkspace() {
     }));
   }
 
+  async function copyResult(result: UnifiedSearchResult) {
+    const resultKey = `${result.type}-${result.id}`;
+
+    try {
+      await writeClipboard(formatResultForCopy(result));
+      setCopiedResultKey(resultKey);
+      window.setTimeout(() => setCopiedResultKey((current) => (current === resultKey ? "" : current)), 1800);
+    } catch {
+      setMessage("복사에 실패했습니다. 브라우저 권한을 확인해주세요.");
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#f7f8fa]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-6 py-8">
@@ -217,6 +240,19 @@ export default function SearchWorkspace() {
                   placeholder="연차, 해고, 포괄임금, 파견"
                   value={form.query}
                 />
+                <div className="flex flex-wrap gap-2">
+                  {FREQUENT_KEYWORDS.map((keyword) => (
+                    <button
+                      className="h-8 rounded-full border border-[#e5e8eb] bg-white px-3 text-xs font-bold text-[#4e5968] transition hover:border-[#3182f6] hover:bg-[#e8f3ff] hover:text-[#3182f6] disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={loading}
+                      key={keyword}
+                      onClick={() => searchFrequentKeyword(keyword)}
+                      type="button"
+                    >
+                      {keyword}
+                    </button>
+                  ))}
+                </div>
               </label>
 
               <label className="grid gap-2">
@@ -337,15 +373,22 @@ export default function SearchWorkspace() {
           {response?.errors.cases ? <ErrorBand message={response.errors.cases} /> : null}
           {response?.errors.adminInterpretations ? <ErrorBand message={response.errors.adminInterpretations} /> : null}
           {message ? <ErrorBand message={message} /> : null}
+          {hasSearched ? (
+            <div className="border-b border-[#f2f4f6] bg-[#fbfcfd] px-5 py-3 text-sm font-semibold text-[#6b7684]">
+              {SEARCH_RESULT_NOTICE}
+            </div>
+          ) : null}
 
           {results.length > 0 ? (
             <div className="grid gap-3 p-5">
               {results.map((result) => (
                 <ResultCard
+                  copied={copiedResultKey === `${result.type}-${result.id}`}
                   highlightEnabled={form.highlightMatches}
                   highlightQuery={form.query}
                   isAdminDetailOpen={result.type === "admin_interpretation" ? Boolean(openAdminDetails[result.id]) : false}
                   key={`${result.type}-${result.id}`}
+                  onCopyResult={copyResult}
                   onToggleAdminDetail={toggleAdminDetail}
                   result={result}
                 />
@@ -393,12 +436,16 @@ function ResultCard({
   highlightEnabled,
   highlightQuery,
   isAdminDetailOpen,
+  copied,
+  onCopyResult,
   onToggleAdminDetail
 }: {
   result: UnifiedSearchResult;
   highlightEnabled: boolean;
   highlightQuery: string;
   isAdminDetailOpen: boolean;
+  copied: boolean;
+  onCopyResult: (result: UnifiedSearchResult) => void;
   onToggleAdminDetail: (id: number) => void;
 }) {
   if (result.type === "case") {
@@ -421,20 +468,29 @@ function ResultCard({
         <h3 className="mb-3 text-lg font-bold text-[#191f28]">
           <HighlightedText enabled={highlightEnabled} query={highlightQuery} value={result.title || "판례 제목 없음"} />
         </h3>
-        <dl className="mb-4 grid gap-2 text-sm text-[#4e5968] md:grid-cols-4">
-          <Meta label="선고일자" value={result.decisionDate} />
-          <Meta label="법원명" value={result.courtName} />
+        <dl className="mb-4 grid gap-2 text-sm text-[#4e5968] md:grid-cols-5">
+          <Meta label="법원/기관" value={result.courtName} />
+          <Meta label="날짜" value={result.decisionDate} />
           <Meta label="사건번호" value={result.caseNumber} />
+          <Meta label="관련 법령" value={result.caseTypeName || "상세에서 확인"} />
           <Meta label="판결유형" value={result.judgmentType} />
         </dl>
-        <p className="mb-4 text-sm leading-6 text-[#6b7684]">판시사항과 판례내용은 원문 보기에서 확인할 수 있습니다.</p>
-        <Link
-          className="inline-flex h-9 items-center gap-2 rounded-md bg-[#f2f4f6] px-3 text-sm font-bold text-[#4e5968] transition hover:bg-[#e8f3ff] hover:text-[#3182f6]"
-          href={`/cases/${encodeURIComponent(result.id)}?${detailParams.toString()}`}
-        >
-          원문 보기
-          <ExternalLink aria-hidden="true" size={15} strokeWidth={2.2} />
-        </Link>
+        <SummaryBlock
+          highlightEnabled={highlightEnabled}
+          highlightQuery={highlightQuery}
+          label="핵심 내용"
+          value="판시사항과 판례내용은 원문 보기에서 확인할 수 있습니다."
+        />
+        <div className="flex flex-wrap gap-2">
+          <Link
+            className="inline-flex h-9 items-center gap-2 rounded-md bg-[#f2f4f6] px-3 text-sm font-bold text-[#4e5968] transition hover:bg-[#e8f3ff] hover:text-[#3182f6]"
+            href={`/cases/${encodeURIComponent(result.id)}?${detailParams.toString()}`}
+          >
+            원문 보기
+            <ExternalLink aria-hidden="true" size={15} strokeWidth={2.2} />
+          </Link>
+          <CopyButton copied={copied} onClick={() => onCopyResult(result)} />
+        </div>
       </article>
     );
   }
@@ -456,39 +512,46 @@ function ResultCard({
       <dl className="mb-4 grid gap-2 text-sm text-[#4e5968] md:grid-cols-4">
         <Meta label="관련 법령" value={result.law_name} />
         <Meta label="관련 조문" value={result.article} />
-        <Meta label="회시일" value={result.reply_date} />
-        <Meta label="담당 기관" value={result.ministry} />
+        <Meta label="날짜" value={result.reply_date} />
+        <Meta label="법원/기관" value={result.ministry} />
       </dl>
       <SummaryBlock
         highlightEnabled={highlightEnabled}
         highlightQuery={highlightQuery}
-        label="질의 요약"
+        label="핵심 내용"
         value={qa.question}
       />
       <div className="mb-4 flex flex-wrap gap-2 text-xs font-semibold text-[#8b95a1]">
-        {result.source_url ? (
-          <a className="text-[#3182f6] hover:text-[#1b64da]" href={result.source_url} rel="noreferrer" target="_blank">
-            원문 URL
-          </a>
-        ) : (
-          <span>원문 URL 없음</span>
-        )}
         <span>파일: {result.file_name || "-"}</span>
         <span>페이지: {result.page_no ?? "-"}</span>
       </div>
-      <button
-        aria-expanded={isAdminDetailOpen}
-        className="mb-4 inline-flex h-9 items-center gap-2 rounded-md bg-[#f2f4f6] px-3 text-sm font-bold text-[#4e5968] transition hover:bg-[#e8f3ff] hover:text-[#3182f6]"
-        onClick={() => onToggleAdminDetail(result.id)}
-        type="button"
-      >
-        {isAdminDetailOpen ? "상세내용 닫기" : "상세내용 보기"}
-        {isAdminDetailOpen ? (
-          <ChevronUp aria-hidden="true" size={15} strokeWidth={2.2} />
-        ) : (
-          <ChevronDown aria-hidden="true" size={15} strokeWidth={2.2} />
-        )}
-      </button>
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button
+          aria-expanded={isAdminDetailOpen}
+          className="inline-flex h-9 items-center gap-2 rounded-md bg-[#f2f4f6] px-3 text-sm font-bold text-[#4e5968] transition hover:bg-[#e8f3ff] hover:text-[#3182f6]"
+          onClick={() => onToggleAdminDetail(result.id)}
+          type="button"
+        >
+          {isAdminDetailOpen ? "상세내용 닫기" : "상세내용 보기"}
+          {isAdminDetailOpen ? (
+            <ChevronUp aria-hidden="true" size={15} strokeWidth={2.2} />
+          ) : (
+            <ChevronDown aria-hidden="true" size={15} strokeWidth={2.2} />
+          )}
+        </button>
+        {result.source_url ? (
+          <a
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-[#d1d6db] bg-white px-3 text-sm font-bold text-[#4e5968] transition hover:bg-[#f2f4f6]"
+            href={result.source_url}
+            rel="noreferrer"
+            target="_blank"
+          >
+            원문 보기
+            <ExternalLink aria-hidden="true" size={15} strokeWidth={2.2} />
+          </a>
+        ) : null}
+        <CopyButton copied={copied} onClick={() => onCopyResult(result)} />
+      </div>
       {isAdminDetailOpen ? (
         <div className="mb-4 grid gap-3">
           <DetailBlock
@@ -563,6 +626,27 @@ function Meta({ label, value }: { label: string; value: string }) {
   );
 }
 
+function CopyButton({ copied, onClick }: { copied: boolean; onClick: () => void }) {
+  return (
+    <button
+      className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-bold transition ${
+        copied
+          ? "border-[#20c997] bg-[#e6fcf5] text-[#087f5b]"
+          : "border-[#d1d6db] bg-white text-[#4e5968] hover:bg-[#f2f4f6]"
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      {copied ? (
+        <Check aria-hidden="true" size={15} strokeWidth={2.2} />
+      ) : (
+        <Copy aria-hidden="true" size={15} strokeWidth={2.2} />
+      )}
+      {copied ? "복사됨" : "복사"}
+    </button>
+  );
+}
+
 function ErrorBand({ message }: { message: string }) {
   return <div className="border-b border-[#f2f4f6] px-5 py-4 text-sm font-semibold text-[#f04452]">{message}</div>;
 }
@@ -619,6 +703,53 @@ function truncateText(value: string, maxLength: number) {
   }
 
   return `${normalized.slice(0, maxLength)}...`;
+}
+
+function formatResultForCopy(result: UnifiedSearchResult) {
+  if (result.type === "case") {
+    return [
+      "[자료유형] 판례",
+      `[제목] ${result.title || "-"}`,
+      `[법원/기관] ${result.courtName || "-"}`,
+      `[날짜] ${result.decisionDate || "-"}`,
+      `[관련 법령] ${result.caseTypeName || "상세에서 확인"}`,
+      `[사건번호] ${result.caseNumber || "-"}`,
+      "[핵심 내용] 판시사항과 판례내용은 원문 보기에서 확인할 수 있습니다."
+    ].join("\n");
+  }
+
+  const qa = deriveAdminQuestionAnswer(result.question, result.answer, result.title);
+
+  return [
+    "[자료유형] 행정해석",
+    `[제목] ${result.title || "-"}`,
+    `[법원/기관] ${result.ministry || "-"}`,
+    `[날짜] ${result.reply_date || "-"}`,
+    `[관련 법령] ${result.law_name || "-"}`,
+    `[관련 조문] ${result.article || "-"}`,
+    `[핵심 내용] ${truncateText(qa.question || qa.answer || "-", 500)}`,
+    result.source_url ? `[원문 URL] ${result.source_url}` : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function writeClipboard(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
 }
 
 function storeSearch(state: StoredSearchState) {
