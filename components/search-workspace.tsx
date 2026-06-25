@@ -230,33 +230,33 @@ export default function SearchWorkspace() {
         </header>
 
         <section className="rounded-md border border-[#e5e8eb] bg-white p-5 shadow-panel">
-          <form className="grid gap-4" onSubmit={handleSubmit}>
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_170px_170px_170px_170px_104px]">
-              <div className="grid gap-2">
-                <label className="grid gap-2">
-                  <span className="text-sm font-bold text-[#4e5968]">검색어</span>
-                  <input
-                    className="h-11 rounded-md border border-[#d1d6db] bg-[#fbfcfd] px-3 text-sm text-[#191f28] outline-none transition placeholder:text-[#8b95a1] focus:border-[#3182f6] focus:bg-white focus:ring-2 focus:ring-[#e8f3ff]"
-                    onChange={(event) => setForm((current) => ({ ...current, query: event.target.value }))}
-                    placeholder="연차, 해고, 포괄임금, 파견"
-                    value={form.query}
-                  />
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {FREQUENT_KEYWORDS.map((keyword) => (
-                    <button
-                      className="h-8 rounded-full border border-[#e5e8eb] bg-white px-3 text-xs font-bold text-[#4e5968] transition hover:border-[#3182f6] hover:bg-[#e8f3ff] hover:text-[#3182f6] disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={loading}
-                      key={keyword}
-                      onClick={() => searchFrequentKeyword(keyword)}
-                      type="button"
-                    >
-                      {keyword}
-                    </button>
-                  ))}
-                </div>
+          <form className="grid gap-5" onSubmit={handleSubmit}>
+            <div className="grid gap-2">
+              <label className="grid gap-2">
+                <span className="text-sm font-bold text-[#4e5968]">검색어</span>
+                <input
+                  className="h-11 rounded-md border border-[#d1d6db] bg-[#fbfcfd] px-3 text-sm text-[#191f28] outline-none transition placeholder:text-[#8b95a1] focus:border-[#3182f6] focus:bg-white focus:ring-2 focus:ring-[#e8f3ff]"
+                  onChange={(event) => setForm((current) => ({ ...current, query: event.target.value }))}
+                  placeholder="연차, 해고, 포괄임금, 파견"
+                  value={form.query}
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {FREQUENT_KEYWORDS.map((keyword) => (
+                  <button
+                    className="h-8 rounded-full border border-[#e5e8eb] bg-white px-3 text-xs font-bold text-[#4e5968] transition hover:border-[#3182f6] hover:bg-[#e8f3ff] hover:text-[#3182f6] disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={loading}
+                    key={keyword}
+                    onClick={() => searchFrequentKeyword(keyword)}
+                    type="button"
+                  >
+                    {keyword}
+                  </button>
+                ))}
               </div>
+            </div>
 
+            <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-2 xl:grid-cols-[170px_170px_170px_170px_auto]">
               <label className="grid gap-2">
                 <span className="text-sm font-bold text-[#4e5968]">판례 검색범위</span>
                 <select
@@ -308,7 +308,7 @@ export default function SearchWorkspace() {
 
               <div className="flex items-end gap-2">
                 <button
-                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md bg-[#3182f6] px-4 text-sm font-bold text-white transition hover:bg-[#1b64da] disabled:cursor-not-allowed disabled:bg-[#b0b8c1] lg:flex-none"
+                  className="inline-flex h-11 min-w-24 flex-1 items-center justify-center gap-2 rounded-md bg-[#3182f6] px-4 text-sm font-bold text-white transition hover:bg-[#1b64da] disabled:cursor-not-allowed disabled:bg-[#b0b8c1] xl:flex-none"
                   disabled={loading}
                   type="submit"
                 >
