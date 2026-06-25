@@ -760,7 +760,7 @@ async function enrichCaseSources(sources: ReportSource[]) {
         return {
           ...source,
           law: detail.referenceStatutes || source.law,
-          summary: truncateText([detail.issues, detail.summary, detail.content].filter(Boolean).join(" "), 500),
+          summary: normalizeLongText([detail.issues, detail.summary, detail.content].filter(Boolean).join(" ")),
           detail
         };
       } catch {
@@ -795,7 +795,7 @@ function toReportSource(result: UnifiedSearchResult): ReportSource {
     institution: result.ministry || result.department || "고용노동부",
     date: result.reply_date || "",
     law: [result.law_name, result.article].filter(Boolean).join(" "),
-    summary: truncateText(result.question || result.answer || "-", 500),
+    summary: normalizeLongText(result.question || result.answer || "-"),
     originalUrl: result.source_url || ""
   };
 }
@@ -1096,8 +1096,7 @@ function splitReadableSentences(value: string) {
   }
 
   const sentenceMatches = normalized.match(/[^.!?。！？]+[.!?。！？]?/g) ?? [normalized];
-  const sentences = sentenceMatches.map((sentence) => sentence.trim()).filter(Boolean);
-  return sentences.slice(0, 4);
+  return sentenceMatches.map((sentence) => sentence.trim()).filter(Boolean);
 }
 
 function compactText(value: string, maxLength: number, options: { ellipsis?: boolean } = {}) {
@@ -1178,14 +1177,8 @@ function uniqueStrings(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
 
-function truncateText(value: string, maxLength: number) {
-  const normalized = value.replace(/\s+/g, " ").trim();
-
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, maxLength)}...`;
+function normalizeLongText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 async function writeClipboard(value: string) {
