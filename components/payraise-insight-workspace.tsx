@@ -104,7 +104,7 @@ const initialCompanyFinancials: CompanyFinancial[] = [
   { year: 2023, revenue: 5150000000, operatingProfit: 286000000, laborCost: 2630000000, valueAdded: 3900000000, employeeCount: 47, averageSalary: 56000000, hcRoi: 1.85 },
   { year: 2024, revenue: 5480000000, operatingProfit: 312000000, laborCost: 2890000000, valueAdded: 4300000000, employeeCount: 49, averageSalary: 59000000, hcRoi: 1.9 },
   { year: 2025, revenue: 5860000000, operatingProfit: 342000000, laborCost: 3180000000, valueAdded: 4700000000, employeeCount: 52, averageSalary: 61200000, hcRoi: 1.93 },
-  { year: 2026, revenue: 6240000000, operatingProfit: 388000000, laborCost: 3410000000, valueAdded: 5000000000, employeeCount: 55, averageSalary: 62000000, hcRoi: 2.01 }
+  { year: 2026, revenue: 10000000000, operatingProfit: 6000000000, laborCost: 1500000000, valueAdded: 5000000000, employeeCount: 55, averageSalary: 62000000, hcRoi: 5.0 }
 ];
 
 const initialPublicIndices: PublicIndex[] = [
@@ -577,9 +577,9 @@ function DataView({
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <DataForm title="회사 재무지표 입력" onSubmit={onCompanySubmit} disabled={!canWrite}>
           <NumberInput name="year" label="연도" defaultValue={2026} />
-          <NumberInput name="revenue" label="매출액" defaultValue={6240000000} />
-          <NumberInput name="operatingProfit" label="영업이익" defaultValue={388000000} />
-          <NumberInput name="laborCost" label="총 인건비" defaultValue={3410000000} />
+          <NumberInput name="revenue" label="매출액" defaultValue={10000000000} />
+          <NumberInput name="operatingProfit" label="영업이익" defaultValue={6000000000} />
+          <NumberInput name="laborCost" label="총 인건비" defaultValue={1500000000} />
           <NumberInput name="valueAdded" label="부가가치" defaultValue={5000000000} />
           <NumberInput name="employeeCount" label="직원 수" defaultValue={55} />
           <NumberInput name="averageSalary" label="평균임금" defaultValue={62000000} />

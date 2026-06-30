@@ -20,7 +20,7 @@ type CompanyFinancial = {
 
 const companyFinancials: CompanyFinancial[] = [
   { year: 2025, revenue: 5860000000, operatingProfit: 342000000, laborCost: 3180000000, valueAdded: 4700000000, employeeCount: 52, averageSalary: 61200000 },
-  { year: 2026, revenue: 6240000000, operatingProfit: 388000000, laborCost: 3410000000, valueAdded: 5000000000, employeeCount: 55, averageSalary: 62000000 }
+  { year: 2026, revenue: 10000000000, operatingProfit: 6000000000, laborCost: 1500000000, valueAdded: 5000000000, employeeCount: 55, averageSalary: 62000000 }
 ];
 
 const publicIndices = [
