@@ -1,5 +1,5 @@
-import SearchWorkspace from "@/components/search-workspace";
+import PayRaiseInsightWorkspace from "@/components/payraise-insight-workspace";
 
 export default function Home() {
-  return <SearchWorkspace />;
+  return <PayRaiseInsightWorkspace />;
 }

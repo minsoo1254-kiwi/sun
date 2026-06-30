@@ -35,8 +35,28 @@ select {
     background: #ffffff;
   }
 
+  body > * {
+    visibility: hidden;
+  }
+
+  .print-report,
+  .print-report * {
+    visibility: visible;
+  }
+
+  .print-report {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
   button,
-  a {
+  a,
+  svg,
+  rect,
+  polyline {
     print-color-adjust: exact;
   }
 }
