@@ -13,7 +13,7 @@ import {
   Upload,
   Users
 } from "lucide-react";
-import { ChangeEvent, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import {
   calculateHcroi,
   calculateLaborCostRevenueRatio,
@@ -81,6 +81,13 @@ type AuditLog = {
   createdAt: string;
 };
 
+type DashboardData = {
+  companyFinancials: CompanyFinancial[];
+  publicIndices: PublicIndex[];
+  competitors: Competitor[];
+  otSummary: OtSummary[];
+};
+
 const roleLabels: Record<Role, string> = {
   hr_staff: "HR 담당자",
   hr_admin: "HR 관리자",
@@ -140,6 +147,14 @@ const initialLogs: AuditLog[] = [
   { actionType: "download", resourceType: "report", actor: "executive@company.com", detail: "임원용 PDF 보고서 다운로드", createdAt: "2026-06-30 11:05" }
 ];
 
+const initialDashboardData: DashboardData = {
+  companyFinancials: initialCompanyFinancials,
+  publicIndices: initialPublicIndices,
+  competitors: initialCompetitors,
+  otSummary: initialOtSummary
+};
+
+const DASHBOARD_STORAGE_KEY = "payraise-insight-dashboard-data-v2";
 const currencyFormatter = new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 });
 
 const requiredCsvColumns = [
@@ -158,10 +173,8 @@ export default function PayRaiseInsightWorkspace() {
   const [role, setRole] = useState<Role>("hr_admin");
   const [view, setView] = useState<View>("dashboard");
   const [year, setYear] = useState(2026);
-  const [companyFinancials, setCompanyFinancials] = useState(initialCompanyFinancials);
-  const [publicIndices, setPublicIndices] = useState(initialPublicIndices);
-  const [competitors, setCompetitors] = useState(initialCompetitors);
-  const [otSummary, setOtSummary] = useState(initialOtSummary);
+  const [dashboardData, setDashboardData] = useState<DashboardData>(initialDashboardData);
+  const [hasHydratedData, setHasHydratedData] = useState(false);
   const [logs, setLogs] = useState(initialLogs);
   const [csvMessage, setCsvMessage] = useState("샘플 CSV 또는 실제 OT 집계 CSV를 업로드해 검증할 수 있습니다.");
   const [selectedCharts, setSelectedCharts] = useState<string[]>([
@@ -173,12 +186,42 @@ export default function PayRaiseInsightWorkspace() {
     "monthlyOtTrend"
   ]);
 
+  const { companyFinancials, publicIndices, competitors, otSummary } = dashboardData;
   const permissions = getPermissions(role);
   const availableYears = Array.from(new Set(companyFinancials.map((item) => item.year))).sort((a, b) => b - a);
+  const currentCompanyFinancial = companyFinancials.find((item) => item.year === year) ?? companyFinancials[companyFinancials.length - 1];
+  const currentPublicIndex = publicIndices.find((item) => item.year === year) ?? publicIndices[publicIndices.length - 1];
 
   const dashboard = useMemo(() => {
     return buildDashboard(year, companyFinancials, publicIndices, competitors, otSummary);
   }, [year, companyFinancials, publicIndices, competitors, otSummary]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      const storedData = loadDashboardData();
+
+      if (storedData) {
+        setDashboardData(storedData);
+        const storedYears = storedData.companyFinancials.map((item) => item.year);
+
+        if (storedYears.length > 0) {
+          setYear(Math.max(...storedYears));
+        }
+      }
+
+      setHasHydratedData(true);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedData) {
+      return;
+    }
+
+    saveDashboardData(dashboardData);
+  }, [dashboardData, hasHydratedData]);
 
   function appendLog(actionType: string, resourceType: string, detail: string) {
     setLogs((current) => [
@@ -220,8 +263,12 @@ export default function PayRaiseInsightWorkspace() {
       return;
     }
 
-    setCompanyFinancials((items) => upsertByYear(items, nextItem));
+    setDashboardData((currentData) => ({
+      ...currentData,
+      companyFinancials: upsertByYear(currentData.companyFinancials, nextItem)
+    }));
     setYear(nextItem.year);
+    setView("dashboard");
     appendLog("update", "financials", `${nextItem.year}년 회사 재무지표 저장`);
   }
 
@@ -243,7 +290,12 @@ export default function PayRaiseInsightWorkspace() {
       sourceName: String(formData.get("sourceName") ?? "수동 입력")
     };
 
-    setPublicIndices((items) => upsertByYear(items, nextItem));
+    setDashboardData((currentData) => ({
+      ...currentData,
+      publicIndices: upsertByYear(currentData.publicIndices, nextItem)
+    }));
+    setYear(nextItem.year);
+    setView("dashboard");
     appendLog("update", "public_indices", `${nextItem.year}년 외부 임금지표 저장`);
   }
 
@@ -269,10 +321,13 @@ export default function PayRaiseInsightWorkspace() {
       return;
     }
 
-    setCompetitors((items) => [
-      nextItem,
-      ...items.filter((item) => !(item.year === nextItem.year && item.companyName === nextItem.companyName))
-    ]);
+    setDashboardData((currentData) => ({
+      ...currentData,
+      competitors: [
+        nextItem,
+        ...currentData.competitors.filter((item) => !(item.year === nextItem.year && item.companyName === nextItem.companyName))
+      ]
+    }));
     appendLog("update", "competitors", `${nextItem.companyName} 경쟁지표 저장`);
   }
 
@@ -298,7 +353,10 @@ export default function PayRaiseInsightWorkspace() {
         return;
       }
 
-      setOtSummary((items) => [...result.rows, ...items]);
+      setDashboardData((currentData) => ({
+        ...currentData,
+        otSummary: [...result.rows, ...currentData.otSummary]
+      }));
       setCsvMessage(`${result.rows.length}개 OT 집계 행을 업로드했습니다.`);
       appendLog("upload", "file", `${file.name} CSV 업로드`);
     };
@@ -418,6 +476,8 @@ export default function PayRaiseInsightWorkspace() {
           {view === "data" && (
             <DataView
               canWrite={permissions.writeData}
+              companyFinancial={currentCompanyFinancial}
+              publicIndex={currentPublicIndex}
               csvMessage={csvMessage}
               onCompanySubmit={handleCompanySubmit}
               onPublicIndexSubmit={handlePublicIndexSubmit}
@@ -558,6 +618,8 @@ function DashboardView({ dashboard, year }: { dashboard: ReturnType<typeof build
 
 function DataView({
   canWrite,
+  companyFinancial,
+  publicIndex,
   csvMessage,
   onCompanySubmit,
   onPublicIndexSubmit,
@@ -565,6 +627,8 @@ function DataView({
   onCsvUpload
 }: {
   canWrite: boolean;
+  companyFinancial: CompanyFinancial;
+  publicIndex: PublicIndex;
   csvMessage: string;
   onCompanySubmit: (formData: FormData) => void;
   onPublicIndexSubmit: (formData: FormData) => void;
@@ -575,28 +639,28 @@ function DataView({
     <div className="space-y-5">
       {!canWrite && <AccessNotice text="현재 역할은 데이터 입력 권한이 없습니다." />}
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <DataForm title="회사 재무지표 입력" onSubmit={onCompanySubmit} disabled={!canWrite}>
-          <NumberInput name="year" label="연도" defaultValue={2026} />
-          <NumberInput name="revenue" label="매출액" defaultValue={10000000000} />
-          <NumberInput name="operatingProfit" label="영업이익" defaultValue={6000000000} />
-          <NumberInput name="laborCost" label="총 인건비" defaultValue={1500000000} />
-          <NumberInput name="valueAdded" label="부가가치" defaultValue={5000000000} />
-          <NumberInput name="employeeCount" label="직원 수" defaultValue={55} />
-          <NumberInput name="averageSalary" label="평균임금" defaultValue={62000000} />
-          <NumberInput name="hcRoi" label="HC ROI" defaultValue={2.01} step="0.01" />
+        <DataForm key={`company-${companyFinancial.year}`} title="회사 재무지표 입력" onSubmit={onCompanySubmit} disabled={!canWrite}>
+          <NumberInput name="year" label="연도" defaultValue={companyFinancial.year} />
+          <NumberInput name="revenue" label="매출액" defaultValue={companyFinancial.revenue} />
+          <NumberInput name="operatingProfit" label="영업이익" defaultValue={companyFinancial.operatingProfit} />
+          <NumberInput name="laborCost" label="총 인건비" defaultValue={companyFinancial.laborCost} />
+          <NumberInput name="valueAdded" label="부가가치" defaultValue={companyFinancial.valueAdded ?? 0} />
+          <NumberInput name="employeeCount" label="직원 수" defaultValue={companyFinancial.employeeCount} />
+          <NumberInput name="averageSalary" label="평균임금" defaultValue={companyFinancial.averageSalary} />
+          <NumberInput name="hcRoi" label="HC ROI" defaultValue={companyFinancial.hcRoi} step="0.01" />
         </DataForm>
 
-        <DataForm title="외부 임금지표 입력" onSubmit={onPublicIndexSubmit} disabled={!canWrite}>
-          <NumberInput name="year" label="연도" defaultValue={2026} />
-          <NumberInput name="minimumWage" label="최저임금" defaultValue={10480} />
-          <NumberInput name="medianIncome" label="중위소득" defaultValue={42100000} />
-          <NumberInput name="industryRegularPay" label="산업 정액급여" defaultValue={67300000} />
-          <NumberInput name="industryOvertimePay" label="산업 초과급여" defaultValue={7900000} />
-          <NumberInput name="industrySpecialPay" label="산업 특별급여" defaultValue={6500000} />
-          <NumberInput name="wageJobInfoAmount" label="임금직무정보 금액" defaultValue={70600000} />
-          <NumberInput name="agreedWageIncreaseRate" label="협약 임금인상률" defaultValue={5.4} step="0.1" />
-          <NumberInput name="unionDemandRate" label="노조 요구율" defaultValue={8.8} step="0.1" />
-          <TextInput name="sourceName" label="출처" defaultValue="통합 기준" />
+        <DataForm key={`public-${publicIndex.year}`} title="외부 임금지표 입력" onSubmit={onPublicIndexSubmit} disabled={!canWrite}>
+          <NumberInput name="year" label="연도" defaultValue={publicIndex.year} />
+          <NumberInput name="minimumWage" label="최저임금" defaultValue={publicIndex.minimumWage} />
+          <NumberInput name="medianIncome" label="중위소득" defaultValue={publicIndex.medianIncome} />
+          <NumberInput name="industryRegularPay" label="산업 정액급여" defaultValue={publicIndex.industryRegularPay} />
+          <NumberInput name="industryOvertimePay" label="산업 초과급여" defaultValue={publicIndex.industryOvertimePay} />
+          <NumberInput name="industrySpecialPay" label="산업 특별급여" defaultValue={publicIndex.industrySpecialPay} />
+          <NumberInput name="wageJobInfoAmount" label="임금직무정보 금액" defaultValue={publicIndex.wageJobInfoAmount} />
+          <NumberInput name="agreedWageIncreaseRate" label="협약 임금인상률" defaultValue={publicIndex.agreedWageIncreaseRate} step="0.1" />
+          <NumberInput name="unionDemandRate" label="노조 요구율" defaultValue={publicIndex.unionDemandRate} step="0.1" />
+          <TextInput name="sourceName" label="출처" defaultValue={publicIndex.sourceName} />
         </DataForm>
 
         <DataForm title="경쟁사 지표 입력" onSubmit={onCompetitorSubmit} disabled={!canWrite}>
@@ -1356,7 +1420,7 @@ function upsertByYear<T extends { year: number }>(items: T[], nextItem: T) {
 }
 
 function readNumber(formData: FormData, key: string) {
-  return Number(formData.get(key) ?? 0);
+  return toFiniteNumber(formData.get(key), 0);
 }
 
 function readOptionalNumber(formData: FormData, key: string) {
@@ -1366,7 +1430,110 @@ function readOptionalNumber(formData: FormData, key: string) {
     return null;
   }
 
-  return Number(value);
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function toFiniteNumber(value: unknown, fallback = 0) {
+  const numericValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
+function loadDashboardData(): DashboardData | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(DASHBOARD_STORAGE_KEY);
+
+    if (!rawValue) {
+      return null;
+    }
+
+    return normalizeDashboardData(JSON.parse(rawValue));
+  } catch {
+    return null;
+  }
+}
+
+function saveDashboardData(data: DashboardData) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(DASHBOARD_STORAGE_KEY, JSON.stringify(normalizeDashboardData(data)));
+}
+
+function normalizeDashboardData(value: unknown): DashboardData {
+  const candidate = value as Partial<DashboardData> | null;
+
+  return {
+    companyFinancials: ensureArray(candidate?.companyFinancials, initialCompanyFinancials).map(normalizeCompanyFinancial),
+    publicIndices: ensureArray(candidate?.publicIndices, initialPublicIndices).map(normalizePublicIndex),
+    competitors: ensureArray(candidate?.competitors, initialCompetitors).map(normalizeCompetitor),
+    otSummary: ensureArray(candidate?.otSummary, initialOtSummary).map(normalizeOtSummary)
+  };
+}
+
+function ensureArray<T>(value: unknown, fallback: T[]) {
+  return Array.isArray(value) && value.length > 0 ? (value as T[]) : fallback;
+}
+
+function normalizeCompanyFinancial(item: Partial<CompanyFinancial>): CompanyFinancial {
+  return {
+    year: Math.trunc(toFiniteNumber(item.year, 2026)),
+    revenue: toFiniteNumber(item.revenue),
+    operatingProfit: toFiniteNumber(item.operatingProfit),
+    laborCost: toFiniteNumber(item.laborCost),
+    valueAdded: item.valueAdded === null || item.valueAdded === undefined ? null : toFiniteNumber(item.valueAdded),
+    employeeCount: Math.trunc(toFiniteNumber(item.employeeCount)),
+    averageSalary: toFiniteNumber(item.averageSalary),
+    hcRoi: toFiniteNumber(item.hcRoi)
+  };
+}
+
+function normalizePublicIndex(item: Partial<PublicIndex>): PublicIndex {
+  return {
+    year: Math.trunc(toFiniteNumber(item.year, 2026)),
+    minimumWage: toFiniteNumber(item.minimumWage),
+    medianIncome: toFiniteNumber(item.medianIncome),
+    industryRegularPay: toFiniteNumber(item.industryRegularPay),
+    industryOvertimePay: toFiniteNumber(item.industryOvertimePay),
+    industrySpecialPay: toFiniteNumber(item.industrySpecialPay),
+    wageJobInfoAmount: toFiniteNumber(item.wageJobInfoAmount),
+    agreedWageIncreaseRate: toFiniteNumber(item.agreedWageIncreaseRate),
+    unionDemandRate: toFiniteNumber(item.unionDemandRate),
+    sourceName: String(item.sourceName ?? "수동 입력")
+  };
+}
+
+function normalizeCompetitor(item: Partial<Competitor>): Competitor {
+  return {
+    companyName: String(item.companyName ?? "경쟁사"),
+    year: Math.trunc(toFiniteNumber(item.year, 2026)),
+    revenue: toFiniteNumber(item.revenue),
+    operatingProfit: toFiniteNumber(item.operatingProfit),
+    laborCost: toFiniteNumber(item.laborCost),
+    employeeCount: Math.trunc(toFiniteNumber(item.employeeCount)),
+    averageTenure: toFiniteNumber(item.averageTenure),
+    averageSalary: toFiniteNumber(item.averageSalary),
+    sourceFileName: String(item.sourceFileName ?? "attached-report.pdf")
+  };
+}
+
+function normalizeOtSummary(item: Partial<OtSummary>): OtSummary {
+  return {
+    yearMonth: String(item.yearMonth ?? "2026-01"),
+    department: String(item.department ?? "미분류"),
+    jobGroup: String(item.jobGroup ?? ""),
+    employeeCount: Math.trunc(toFiniteNumber(item.employeeCount)),
+    totalOtHours: toFiniteNumber(item.totalOtHours),
+    nightHours: toFiniteNumber(item.nightHours),
+    holidayHours: toFiniteNumber(item.holidayHours),
+    unapprovedOtHours: toFiniteNumber(item.unapprovedOtHours),
+    over12hCount: Math.trunc(toFiniteNumber(item.over12hCount))
+  };
 }
 
 function pctDelta(current: number, previous: number) {
