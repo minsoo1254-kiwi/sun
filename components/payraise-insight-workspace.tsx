@@ -49,6 +49,26 @@ type PublicIndex = {
   sourceName: string;
 };
 
+type PayraiseDashboardRecord = {
+  year: number;
+  revenue: number;
+  operatingProfit: number;
+  totalLaborCost: number;
+  addedValue: number | null;
+  employeeCount: number;
+  averageWage: number;
+  hcRoi: number;
+  minimumWage: number;
+  medianIncome: number;
+  industryFixedPay: number;
+  industryOvertimePay: number;
+  industryBonusPay: number;
+  wageInfoAmount: number;
+  agreementIncreaseRate: number;
+  unionDemandRate: number;
+  sourceName: string;
+};
+
 type Competitor = {
   companyName: string;
   year: number;
@@ -82,8 +102,7 @@ type AuditLog = {
 };
 
 type DashboardData = {
-  companyFinancials: CompanyFinancial[];
-  publicIndices: PublicIndex[];
+  records: PayraiseDashboardRecord[];
   competitors: Competitor[];
   otSummary: OtSummary[];
 };
@@ -111,7 +130,7 @@ const initialCompanyFinancials: CompanyFinancial[] = [
   { year: 2023, revenue: 5150000000, operatingProfit: 286000000, laborCost: 2630000000, valueAdded: 3900000000, employeeCount: 47, averageSalary: 56000000, hcRoi: 1.85 },
   { year: 2024, revenue: 5480000000, operatingProfit: 312000000, laborCost: 2890000000, valueAdded: 4300000000, employeeCount: 49, averageSalary: 59000000, hcRoi: 1.9 },
   { year: 2025, revenue: 5860000000, operatingProfit: 342000000, laborCost: 3180000000, valueAdded: 4700000000, employeeCount: 52, averageSalary: 61200000, hcRoi: 1.93 },
-  { year: 2026, revenue: 10000000000, operatingProfit: 6000000000, laborCost: 1500000000, valueAdded: 5000000000, employeeCount: 55, averageSalary: 62000000, hcRoi: 5.0 }
+  { year: 2026, revenue: 10000000000, operatingProfit: 600000000, laborCost: 1500000000, valueAdded: 5000000000, employeeCount: 55, averageSalary: 62000000, hcRoi: 2.01 }
 ];
 
 const initialPublicIndices: PublicIndex[] = [
@@ -148,13 +167,12 @@ const initialLogs: AuditLog[] = [
 ];
 
 const initialDashboardData: DashboardData = {
-  companyFinancials: initialCompanyFinancials,
-  publicIndices: initialPublicIndices,
+  records: createInitialDashboardRecords(initialCompanyFinancials, initialPublicIndices),
   competitors: initialCompetitors,
   otSummary: initialOtSummary
 };
 
-const DASHBOARD_STORAGE_KEY = "payraise-insight-dashboard-data-v2";
+const DASHBOARD_STORAGE_KEY = "payraise-insight-dashboard-data-v3";
 const currencyFormatter = new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 });
 
 const requiredCsvColumns = [
@@ -186,15 +204,14 @@ export default function PayRaiseInsightWorkspace() {
     "monthlyOtTrend"
   ]);
 
-  const { companyFinancials, publicIndices, competitors, otSummary } = dashboardData;
+  const { records, competitors, otSummary } = dashboardData;
   const permissions = getPermissions(role);
-  const availableYears = Array.from(new Set(companyFinancials.map((item) => item.year))).sort((a, b) => b - a);
-  const currentCompanyFinancial = companyFinancials.find((item) => item.year === year) ?? companyFinancials[companyFinancials.length - 1];
-  const currentPublicIndex = publicIndices.find((item) => item.year === year) ?? publicIndices[publicIndices.length - 1];
+  const availableYears = Array.from(new Set(records.map((item) => item.year))).sort((a, b) => b - a);
+  const currentRecord = records.find((item) => item.year === year) ?? records[records.length - 1];
 
   const dashboard = useMemo(() => {
-    return buildDashboard(year, companyFinancials, publicIndices, competitors, otSummary);
-  }, [year, companyFinancials, publicIndices, competitors, otSummary]);
+    return buildDashboard(year, records, competitors, otSummary);
+  }, [year, records, competitors, otSummary]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -202,7 +219,7 @@ export default function PayRaiseInsightWorkspace() {
 
       if (storedData) {
         setDashboardData(storedData);
-        const storedYears = storedData.companyFinancials.map((item) => item.year);
+        const storedYears = storedData.records.map((item) => item.year);
 
         if (storedYears.length > 0) {
           setYear(Math.max(...storedYears));
@@ -247,25 +264,25 @@ export default function PayRaiseInsightWorkspace() {
       return;
     }
 
-    const nextItem: CompanyFinancial = {
+    const nextItem = {
       year: readNumber(formData, "year"),
       revenue: readNumber(formData, "revenue"),
       operatingProfit: readNumber(formData, "operatingProfit"),
-      laborCost: readNumber(formData, "laborCost"),
-      valueAdded: readOptionalNumber(formData, "valueAdded"),
+      totalLaborCost: readNumber(formData, "totalLaborCost"),
+      addedValue: readOptionalNumber(formData, "addedValue"),
       employeeCount: readNumber(formData, "employeeCount"),
-      averageSalary: readNumber(formData, "averageSalary"),
+      averageWage: readNumber(formData, "averageWage"),
       hcRoi: readNumber(formData, "hcRoi")
     };
 
-    if (nextItem.revenue <= 0 || nextItem.employeeCount <= 0 || nextItem.laborCost < 0) {
+    if (nextItem.revenue <= 0 || nextItem.employeeCount <= 0 || nextItem.totalLaborCost < 0) {
       setCsvMessage("매출액과 직원 수는 0보다 커야 하며, 인건비는 음수일 수 없습니다.");
       return;
     }
 
     setDashboardData((currentData) => ({
       ...currentData,
-      companyFinancials: upsertByYear(currentData.companyFinancials, nextItem)
+      records: upsertDashboardRecord(currentData.records, nextItem.year, nextItem)
     }));
     setYear(nextItem.year);
     setView("dashboard");
@@ -277,22 +294,22 @@ export default function PayRaiseInsightWorkspace() {
       return;
     }
 
-    const nextItem: PublicIndex = {
+    const nextItem = {
       year: readNumber(formData, "year"),
       minimumWage: readNumber(formData, "minimumWage"),
       medianIncome: readNumber(formData, "medianIncome"),
-      industryRegularPay: readNumber(formData, "industryRegularPay"),
+      industryFixedPay: readNumber(formData, "industryFixedPay"),
       industryOvertimePay: readNumber(formData, "industryOvertimePay"),
-      industrySpecialPay: readNumber(formData, "industrySpecialPay"),
-      wageJobInfoAmount: readNumber(formData, "wageJobInfoAmount"),
-      agreedWageIncreaseRate: readNumber(formData, "agreedWageIncreaseRate"),
+      industryBonusPay: readNumber(formData, "industryBonusPay"),
+      wageInfoAmount: readNumber(formData, "wageInfoAmount"),
+      agreementIncreaseRate: readNumber(formData, "agreementIncreaseRate"),
       unionDemandRate: readNumber(formData, "unionDemandRate"),
       sourceName: String(formData.get("sourceName") ?? "수동 입력")
     };
 
     setDashboardData((currentData) => ({
       ...currentData,
-      publicIndices: upsertByYear(currentData.publicIndices, nextItem)
+      records: upsertDashboardRecord(currentData.records, nextItem.year, nextItem)
     }));
     setYear(nextItem.year);
     setView("dashboard");
@@ -476,8 +493,7 @@ export default function PayRaiseInsightWorkspace() {
           {view === "data" && (
             <DataView
               canWrite={permissions.writeData}
-              companyFinancial={currentCompanyFinancial}
-              publicIndex={currentPublicIndex}
+              record={currentRecord}
               csvMessage={csvMessage}
               onCompanySubmit={handleCompanySubmit}
               onPublicIndexSubmit={handlePublicIndexSubmit}
@@ -618,8 +634,7 @@ function DashboardView({ dashboard, year }: { dashboard: ReturnType<typeof build
 
 function DataView({
   canWrite,
-  companyFinancial,
-  publicIndex,
+  record,
   csvMessage,
   onCompanySubmit,
   onPublicIndexSubmit,
@@ -627,8 +642,7 @@ function DataView({
   onCsvUpload
 }: {
   canWrite: boolean;
-  companyFinancial: CompanyFinancial;
-  publicIndex: PublicIndex;
+  record: PayraiseDashboardRecord;
   csvMessage: string;
   onCompanySubmit: (formData: FormData) => void;
   onPublicIndexSubmit: (formData: FormData) => void;
@@ -639,28 +653,28 @@ function DataView({
     <div className="space-y-5">
       {!canWrite && <AccessNotice text="현재 역할은 데이터 입력 권한이 없습니다." />}
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <DataForm key={`company-${companyFinancial.year}`} title="회사 재무지표 입력" onSubmit={onCompanySubmit} disabled={!canWrite}>
-          <NumberInput name="year" label="연도" defaultValue={companyFinancial.year} />
-          <NumberInput name="revenue" label="매출액" defaultValue={companyFinancial.revenue} />
-          <NumberInput name="operatingProfit" label="영업이익" defaultValue={companyFinancial.operatingProfit} />
-          <NumberInput name="laborCost" label="총 인건비" defaultValue={companyFinancial.laborCost} />
-          <NumberInput name="valueAdded" label="부가가치" defaultValue={companyFinancial.valueAdded ?? 0} />
-          <NumberInput name="employeeCount" label="직원 수" defaultValue={companyFinancial.employeeCount} />
-          <NumberInput name="averageSalary" label="평균임금" defaultValue={companyFinancial.averageSalary} />
-          <NumberInput name="hcRoi" label="HC ROI" defaultValue={companyFinancial.hcRoi} step="0.01" />
+        <DataForm key={`company-${record.year}`} title="회사 재무지표 입력" onSubmit={onCompanySubmit} disabled={!canWrite}>
+          <NumberInput name="year" label="연도" defaultValue={record.year} />
+          <NumberInput name="revenue" label="매출액" defaultValue={record.revenue} />
+          <NumberInput name="operatingProfit" label="영업이익" defaultValue={record.operatingProfit} />
+          <NumberInput name="totalLaborCost" label="총 인건비" defaultValue={record.totalLaborCost} />
+          <NumberInput name="addedValue" label="부가가치" defaultValue={record.addedValue ?? 0} />
+          <NumberInput name="employeeCount" label="직원 수" defaultValue={record.employeeCount} />
+          <NumberInput name="averageWage" label="평균임금" defaultValue={record.averageWage} />
+          <NumberInput name="hcRoi" label="HC ROI" defaultValue={record.hcRoi} step="0.01" />
         </DataForm>
 
-        <DataForm key={`public-${publicIndex.year}`} title="외부 임금지표 입력" onSubmit={onPublicIndexSubmit} disabled={!canWrite}>
-          <NumberInput name="year" label="연도" defaultValue={publicIndex.year} />
-          <NumberInput name="minimumWage" label="최저임금" defaultValue={publicIndex.minimumWage} />
-          <NumberInput name="medianIncome" label="중위소득" defaultValue={publicIndex.medianIncome} />
-          <NumberInput name="industryRegularPay" label="산업 정액급여" defaultValue={publicIndex.industryRegularPay} />
-          <NumberInput name="industryOvertimePay" label="산업 초과급여" defaultValue={publicIndex.industryOvertimePay} />
-          <NumberInput name="industrySpecialPay" label="산업 특별급여" defaultValue={publicIndex.industrySpecialPay} />
-          <NumberInput name="wageJobInfoAmount" label="임금직무정보 금액" defaultValue={publicIndex.wageJobInfoAmount} />
-          <NumberInput name="agreedWageIncreaseRate" label="협약 임금인상률" defaultValue={publicIndex.agreedWageIncreaseRate} step="0.1" />
-          <NumberInput name="unionDemandRate" label="노조 요구율" defaultValue={publicIndex.unionDemandRate} step="0.1" />
-          <TextInput name="sourceName" label="출처" defaultValue={publicIndex.sourceName} />
+        <DataForm key={`public-${record.year}`} title="외부 임금지표 입력" onSubmit={onPublicIndexSubmit} disabled={!canWrite}>
+          <NumberInput name="year" label="연도" defaultValue={record.year} />
+          <NumberInput name="minimumWage" label="최저임금" defaultValue={record.minimumWage} />
+          <NumberInput name="medianIncome" label="중위소득" defaultValue={record.medianIncome} />
+          <NumberInput name="industryFixedPay" label="산업 정액급여" defaultValue={record.industryFixedPay} />
+          <NumberInput name="industryOvertimePay" label="산업 초과급여" defaultValue={record.industryOvertimePay} />
+          <NumberInput name="industryBonusPay" label="산업 특별급여" defaultValue={record.industryBonusPay} />
+          <NumberInput name="wageInfoAmount" label="임금직무정보 금액" defaultValue={record.wageInfoAmount} />
+          <NumberInput name="agreementIncreaseRate" label="협약 임금인상률" defaultValue={record.agreementIncreaseRate} step="0.1" />
+          <NumberInput name="unionDemandRate" label="노조 요구율" defaultValue={record.unionDemandRate} step="0.1" />
+          <TextInput name="sourceName" label="출처" defaultValue={record.sourceName} />
         </DataForm>
 
         <DataForm title="경쟁사 지표 입력" onSubmit={onCompetitorSubmit} disabled={!canWrite}>
@@ -1218,15 +1232,16 @@ function ReportMetric({ label, value, metric }: { label: string; value: string; 
 
 function buildDashboard(
   year: number,
-  companyFinancials: CompanyFinancial[],
-  publicIndices: PublicIndex[],
+  records: PayraiseDashboardRecord[],
   competitors: Competitor[],
   otSummary: OtSummary[]
 ) {
-  const current = companyFinancials.find((item) => item.year === year) ?? companyFinancials[companyFinancials.length - 1];
-  const previous = companyFinancials.find((item) => item.year === year - 1) ?? current;
-  const currentIndex = publicIndices.find((item) => item.year === year) ?? publicIndices[publicIndices.length - 1];
-  const previousIndex = publicIndices.find((item) => item.year === year - 1) ?? currentIndex;
+  const currentRecord = records.find((item) => item.year === year) ?? records[records.length - 1];
+  const previousRecord = records.find((item) => item.year === year - 1) ?? currentRecord;
+  const current = recordToCompanyFinancial(currentRecord);
+  const previous = recordToCompanyFinancial(previousRecord);
+  const currentIndex = recordToPublicIndex(currentRecord);
+  const previousIndex = recordToPublicIndex(previousRecord);
   const currentCompetitors = competitors.filter((item) => item.year === year);
   const currentOt = otSummary.filter((item) => item.yearMonth.startsWith(String(year)));
   const laborCostPerEmployee = current.employeeCount > 0 ? current.laborCost / current.employeeCount : 0;
@@ -1242,15 +1257,18 @@ function buildDashboard(
   const totalOtEmployees = currentOt.reduce((sum, item) => sum + item.employeeCount, 0);
   const avgOtHours = totalOtEmployees > 0 ? currentOt.reduce((sum, item) => sum + item.totalOtHours, 0) / totalOtEmployees : 0;
 
-  const trendData = companyFinancials
+  const trendData = records
     .slice()
     .sort((a, b) => a.year - b.year)
-    .map((item) => ({
-      label: String(item.year),
-      revenue: item.revenue,
-      operatingProfit: item.operatingProfit,
-      ratio: item.revenue > 0 ? item.laborCost / item.revenue : 0
-    }));
+    .map((record) => {
+      const item = recordToCompanyFinancial(record);
+      return {
+        label: String(item.year),
+        revenue: item.revenue,
+        operatingProfit: item.operatingProfit,
+        ratio: item.revenue > 0 ? item.laborCost / item.revenue : 0
+      };
+    });
 
   const departmentMap = new Map<string, { employees: number; hours: number }>();
   currentOt.forEach((item) => {
@@ -1419,6 +1437,104 @@ function upsertByYear<T extends { year: number }>(items: T[], nextItem: T) {
   return [nextItem, ...items.filter((item) => item.year !== nextItem.year)].sort((a, b) => a.year - b.year);
 }
 
+function upsertDashboardRecord(
+  records: PayraiseDashboardRecord[],
+  year: number,
+  patch: Partial<PayraiseDashboardRecord> & { year: number }
+) {
+  const baseRecord = records.find((item) => item.year === year) ?? getDefaultDashboardRecord(year);
+  const nextRecord = normalizeDashboardRecord({ ...baseRecord, ...patch, year });
+  return upsertByYear(records, nextRecord);
+}
+
+function createInitialDashboardRecords(companyFinancials: CompanyFinancial[], publicIndices: PublicIndex[]) {
+  const years = Array.from(new Set([...companyFinancials.map((item) => item.year), ...publicIndices.map((item) => item.year)])).sort(
+    (a, b) => a - b
+  );
+
+  return years.map((year) => {
+    const financial = companyFinancials.find((item) => item.year === year);
+    const publicIndex = publicIndices.find((item) => item.year === year);
+    return normalizeDashboardRecord({
+      ...getDefaultDashboardRecord(year),
+      ...(financial
+        ? {
+            revenue: financial.revenue,
+            operatingProfit: financial.operatingProfit,
+            totalLaborCost: financial.laborCost,
+            addedValue: financial.valueAdded,
+            employeeCount: financial.employeeCount,
+            averageWage: financial.averageSalary,
+            hcRoi: financial.hcRoi
+          }
+        : {}),
+      ...(publicIndex
+        ? {
+            minimumWage: publicIndex.minimumWage,
+            medianIncome: publicIndex.medianIncome,
+            industryFixedPay: publicIndex.industryRegularPay,
+            industryOvertimePay: publicIndex.industryOvertimePay,
+            industryBonusPay: publicIndex.industrySpecialPay,
+            wageInfoAmount: publicIndex.wageJobInfoAmount,
+            agreementIncreaseRate: publicIndex.agreedWageIncreaseRate,
+            unionDemandRate: publicIndex.unionDemandRate,
+            sourceName: publicIndex.sourceName
+          }
+        : {})
+    });
+  });
+}
+
+function getDefaultDashboardRecord(year: number): PayraiseDashboardRecord {
+  return {
+    year,
+    revenue: 0,
+    operatingProfit: 0,
+    totalLaborCost: 0,
+    addedValue: null,
+    employeeCount: 0,
+    averageWage: 0,
+    hcRoi: 0,
+    minimumWage: 0,
+    medianIncome: 0,
+    industryFixedPay: 0,
+    industryOvertimePay: 0,
+    industryBonusPay: 0,
+    wageInfoAmount: 0,
+    agreementIncreaseRate: 0,
+    unionDemandRate: 0,
+    sourceName: "수동 입력"
+  };
+}
+
+function recordToCompanyFinancial(record: PayraiseDashboardRecord): CompanyFinancial {
+  return {
+    year: record.year,
+    revenue: record.revenue,
+    operatingProfit: record.operatingProfit,
+    laborCost: record.totalLaborCost,
+    valueAdded: record.addedValue,
+    employeeCount: record.employeeCount,
+    averageSalary: record.averageWage,
+    hcRoi: record.hcRoi
+  };
+}
+
+function recordToPublicIndex(record: PayraiseDashboardRecord): PublicIndex {
+  return {
+    year: record.year,
+    minimumWage: record.minimumWage,
+    medianIncome: record.medianIncome,
+    industryRegularPay: record.industryFixedPay,
+    industryOvertimePay: record.industryOvertimePay,
+    industrySpecialPay: record.industryBonusPay,
+    wageJobInfoAmount: record.wageInfoAmount,
+    agreedWageIncreaseRate: record.agreementIncreaseRate,
+    unionDemandRate: record.unionDemandRate,
+    sourceName: record.sourceName
+  };
+}
+
 function readNumber(formData: FormData, key: string) {
   return toFiniteNumber(formData.get(key), 0);
 }
@@ -1467,10 +1583,17 @@ function saveDashboardData(data: DashboardData) {
 
 function normalizeDashboardData(value: unknown): DashboardData {
   const candidate = value as Partial<DashboardData> | null;
+  const legacyCandidate = value as { companyFinancials?: CompanyFinancial[]; publicIndices?: PublicIndex[] } | null;
+  const records = Array.isArray(candidate?.records)
+    ? candidate.records.map(normalizeDashboardRecord)
+    : createInitialDashboardRecords(
+        ensureArray(legacyCandidate?.companyFinancials, initialCompanyFinancials),
+        ensureArray(legacyCandidate?.publicIndices, initialPublicIndices)
+      );
+  const safeRecords = records.length > 0 ? records : initialDashboardData.records;
 
   return {
-    companyFinancials: ensureArray(candidate?.companyFinancials, initialCompanyFinancials).map(normalizeCompanyFinancial),
-    publicIndices: ensureArray(candidate?.publicIndices, initialPublicIndices).map(normalizePublicIndex),
+    records: safeRecords,
     competitors: ensureArray(candidate?.competitors, initialCompetitors).map(normalizeCompetitor),
     otSummary: ensureArray(candidate?.otSummary, initialOtSummary).map(normalizeOtSummary)
   };
@@ -1480,29 +1603,23 @@ function ensureArray<T>(value: unknown, fallback: T[]) {
   return Array.isArray(value) && value.length > 0 ? (value as T[]) : fallback;
 }
 
-function normalizeCompanyFinancial(item: Partial<CompanyFinancial>): CompanyFinancial {
+function normalizeDashboardRecord(item: Partial<PayraiseDashboardRecord>): PayraiseDashboardRecord {
   return {
     year: Math.trunc(toFiniteNumber(item.year, 2026)),
     revenue: toFiniteNumber(item.revenue),
     operatingProfit: toFiniteNumber(item.operatingProfit),
-    laborCost: toFiniteNumber(item.laborCost),
-    valueAdded: item.valueAdded === null || item.valueAdded === undefined ? null : toFiniteNumber(item.valueAdded),
+    totalLaborCost: toFiniteNumber(item.totalLaborCost),
+    addedValue: item.addedValue === null || item.addedValue === undefined ? null : toFiniteNumber(item.addedValue),
     employeeCount: Math.trunc(toFiniteNumber(item.employeeCount)),
-    averageSalary: toFiniteNumber(item.averageSalary),
-    hcRoi: toFiniteNumber(item.hcRoi)
-  };
-}
-
-function normalizePublicIndex(item: Partial<PublicIndex>): PublicIndex {
-  return {
-    year: Math.trunc(toFiniteNumber(item.year, 2026)),
+    averageWage: toFiniteNumber(item.averageWage),
+    hcRoi: toFiniteNumber(item.hcRoi),
     minimumWage: toFiniteNumber(item.minimumWage),
     medianIncome: toFiniteNumber(item.medianIncome),
-    industryRegularPay: toFiniteNumber(item.industryRegularPay),
+    industryFixedPay: toFiniteNumber(item.industryFixedPay),
     industryOvertimePay: toFiniteNumber(item.industryOvertimePay),
-    industrySpecialPay: toFiniteNumber(item.industrySpecialPay),
-    wageJobInfoAmount: toFiniteNumber(item.wageJobInfoAmount),
-    agreedWageIncreaseRate: toFiniteNumber(item.agreedWageIncreaseRate),
+    industryBonusPay: toFiniteNumber(item.industryBonusPay),
+    wageInfoAmount: toFiniteNumber(item.wageInfoAmount),
+    agreementIncreaseRate: toFiniteNumber(item.agreementIncreaseRate),
     unionDemandRate: toFiniteNumber(item.unionDemandRate),
     sourceName: String(item.sourceName ?? "수동 입력")
   };

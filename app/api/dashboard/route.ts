@@ -8,23 +8,62 @@ import {
   metricValueForApi
 } from "@/lib/payraise-metrics";
 
-type CompanyFinancial = {
+type PayraiseDashboardRecord = {
   year: number;
   revenue: number;
   operatingProfit: number;
-  laborCost: number;
-  valueAdded: number | null;
+  totalLaborCost: number;
+  addedValue: number | null;
   employeeCount: number;
-  averageSalary: number;
+  averageWage: number;
+  hcRoi: number;
+  minimumWage: number;
+  medianIncome: number;
+  industryFixedPay: number;
+  industryOvertimePay: number;
+  industryBonusPay: number;
+  wageInfoAmount: number;
+  agreementIncreaseRate: number;
+  unionDemandRate: number;
 };
 
-const companyFinancials: CompanyFinancial[] = [
-  { year: 2025, revenue: 5860000000, operatingProfit: 342000000, laborCost: 3180000000, valueAdded: 4700000000, employeeCount: 52, averageSalary: 61200000 },
-  { year: 2026, revenue: 10000000000, operatingProfit: 6000000000, laborCost: 1500000000, valueAdded: 5000000000, employeeCount: 55, averageSalary: 62000000 }
-];
-
-const publicIndices = [
-  { year: 2026, industryRegularPay: 67300000 }
+const dashboardRecords: PayraiseDashboardRecord[] = [
+  {
+    year: 2025,
+    revenue: 5860000000,
+    operatingProfit: 342000000,
+    totalLaborCost: 3180000000,
+    addedValue: 4700000000,
+    employeeCount: 52,
+    averageWage: 61200000,
+    hcRoi: 1.93,
+    minimumWage: 10030,
+    medianIncome: 40200000,
+    industryFixedPay: 64700000,
+    industryOvertimePay: 7600000,
+    industryBonusPay: 6100000,
+    wageInfoAmount: 68200000,
+    agreementIncreaseRate: 5.0,
+    unionDemandRate: 8.4
+  },
+  {
+    year: 2026,
+    revenue: 10000000000,
+    operatingProfit: 600000000,
+    totalLaborCost: 1500000000,
+    addedValue: 5000000000,
+    employeeCount: 55,
+    averageWage: 62000000,
+    hcRoi: 2.01,
+    minimumWage: 10480,
+    medianIncome: 42100000,
+    industryFixedPay: 67300000,
+    industryOvertimePay: 7900000,
+    industryBonusPay: 6500000,
+    wageInfoAmount: 70600000,
+    agreementIncreaseRate: 5.4,
+    unionDemandRate: 8.8
+  }
 ];
 
 const otSummary = [
@@ -41,7 +80,7 @@ const otSummary = [
 
 export function GET(request: NextRequest) {
   const requestedYear = Number(request.nextUrl.searchParams.get("year") ?? 2026);
-  const current = companyFinancials.find((item) => item.year === requestedYear);
+  const current = dashboardRecords.find((item) => item.year === requestedYear);
 
   if (!current) {
     return NextResponse.json(
@@ -53,26 +92,32 @@ export function GET(request: NextRequest) {
     );
   }
 
-  const publicIndex = publicIndices.find((item) => item.year === requestedYear);
   const currentOt = otSummary.filter((item) => item.yearMonth.startsWith(String(requestedYear)));
   const totalOtEmployees = currentOt.reduce((sum, item) => sum + item.employeeCount, 0);
   const totalOtHours = currentOt.reduce((sum, item) => sum + item.totalOtHours, 0);
-  const laborCostRevenueRatio = calculateLaborCostRevenueRatio(current);
-  const laborIncomeShare = calculateLaborIncomeShare(current);
-  const hcroi = calculateHcroi(current);
+  const calculationInput = {
+    revenue: current.revenue,
+    laborCost: current.totalLaborCost,
+    valueAdded: current.addedValue,
+    operatingProfit: current.operatingProfit
+  };
+  const laborCostRevenueRatio = calculateLaborCostRevenueRatio(calculationInput);
+  const laborIncomeShare = calculateLaborIncomeShare(calculationInput);
+  const hcroi = calculateHcroi(calculationInput);
 
   return NextResponse.json({
+    inputData: current,
     kpis: {
       revenue: current.revenue,
       operatingProfit: current.operatingProfit,
       operatingProfitRate: roundTo((current.operatingProfit / current.revenue) * 100, 1),
-      laborCost: current.laborCost,
+      laborCost: current.totalLaborCost,
       laborCostRevenueRatio: metricValueForApi(laborCostRevenueRatio),
-      laborCostPerEmployee: current.employeeCount > 0 ? Math.round(current.laborCost / current.employeeCount) : null,
-      valueAdded: current.valueAdded,
+      laborCostPerEmployee: current.employeeCount > 0 ? Math.round(current.totalLaborCost / current.employeeCount) : null,
+      valueAdded: current.addedValue,
       laborIncomeShare: metricValueForApi(laborIncomeShare),
       hcroi: metricValueForApi(hcroi),
-      marketPayRatio: publicIndex ? roundTo((current.averageSalary / publicIndex.industryRegularPay) * 100, 1) : null,
+      marketPayRatio: current.industryFixedPay > 0 ? roundTo((current.averageWage / current.industryFixedPay) * 100, 1) : null,
       avgOtHours: totalOtEmployees > 0 ? roundTo(totalOtHours / totalOtEmployees, 1) : null
     },
     displayValues: {
